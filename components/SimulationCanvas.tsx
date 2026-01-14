@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { SimulationConfig, Particle } from '../types';
 
 interface SimulationCanvasProps {
@@ -155,8 +155,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animationFrameRef = useRef<number>(0);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [isMouseDown, setIsMouseDown] = useState(false);
+  const mousePosRef = useRef({ x: 0, y: 0 });
+  const isMouseDownRef = useRef(false);
   const fpsRef = useRef<{ frames: number; lastTime: number }>({ frames: 0, lastTime: performance.now() });
   
   // Audio Refs
@@ -197,7 +197,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       const { width, height } = containerRef.current.getBoundingClientRect();
       
       const newParticles: Particle[] = [];
-      const count = Math.floor(config.density / 2);
+      const count = Math.floor(config.density);
 
       for (let i = 0; i < count; i++) {
         const type = Math.random() > 0.6 ? 'alpha' : Math.random() > 0.5 ? 'beta' : 'gamma';
@@ -275,11 +275,11 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         p.y += p.vy;
 
         // Mouse Interaction
-        if (isMouseDown) {
-            const dx = p.x - mousePos.x;
-            const dy = p.y - mousePos.y;
+        if (isMouseDownRef.current) {
+            const dx = p.x - mousePosRef.current.x;
+            const dy = p.y - mousePosRef.current.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < 200) {
+            if (dist > 0 && dist < 200) {
                 const force = (200 - dist) / 200;
                 p.vx += (dx / dist) * force * 0.5;
                 p.vy += (dy / dist) * force * 0.5;
@@ -297,8 +297,10 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         const dxC = center.x - p.x;
         const dyC = center.y - p.y;
         const distC = Math.sqrt(dxC*dxC + dyC*dyC);
-        p.vx += (dxC / distC) * 0.01;
-        p.vy += (dyC / distC) * 0.01;
+        if (distC > 0) {
+          p.vx += (dxC / distC) * 0.01;
+          p.vy += (dyC / distC) * 0.01;
+        }
 
         // Type Interaction
         if (p.type === 'alpha') {
@@ -334,7 +336,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
                   const neighbors = grid[key];
                   if (neighbors) {
                       for (const ni of neighbors) {
-                          if (i === ni) continue; // Skip self
+                          if (i >= ni) continue; // Skip self and already-resolved pairs
                           
                           const p2 = particlesRef.current[ni];
                           const distX = p.x - p2.x;
@@ -396,19 +398,19 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [config.isPlaying, config.alphaAttraction, config.betaAttraction, isMouseDown, mousePos]);
+  }, [config.isPlaying, config.alphaAttraction, config.betaAttraction]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      setMousePos({
+      mousePosRef.current = {
           x: e.clientX - rect.left,
           y: e.clientY - rect.top
-      });
+      };
   };
 
   const handleMouseDown = () => {
-      setIsMouseDown(true);
+      isMouseDownRef.current = true;
       soundSystemRef.current?.resume();
   };
 
@@ -418,8 +420,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         className="absolute inset-0 z-0 overflow-hidden cursor-crosshair"
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
-        onMouseUp={() => setIsMouseDown(false)}
-        onMouseLeave={() => setIsMouseDown(false)}
+        onMouseUp={() => { isMouseDownRef.current = false; }}
+        onMouseLeave={() => { isMouseDownRef.current = false; }}
     >
         {/* Background Image Overlay */}
         <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-screen scale-110 animate-pulse-slow">
