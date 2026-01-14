@@ -1,20 +1,73 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Luminous Life (ルミナス・ライフ)
 
-# Run and deploy your AI Studio app
+## 概要
+「Luminous Life」は、数千の粒子（人工生命）が相互作用する様子を視覚と聴覚で楽しむインタラクティブなシミュレーションアプリケーションです。
+React, TypeScript, HTML5 Canvas, Web Audio APIを用いて構築されており、ユーザーの操作やパラメータ設定に応じてリアルタイムに映像と音が生成されます。
 
-This contains everything you need to run your app locally.
+## 主な機能
 
-View your app in AI Studio: https://ai.studio/apps/drive/1xYFgD4NeoFQu0xoVNz_Fd4ISd9oqXiaD
+### 1. ビジュアル・シミュレーション
+*   **多種粒子システム**: Alpha（ピンク）, Beta（シアン）, Gamma（イエロー）の3種類の粒子が存在。
+*   **物理相互作用**: 各粒子タイプ間の引力・斥力を `Sidebar` から調整可能。
+*   **マウスインタラクション**: カーソル付近の粒子に対する引力と、クリック＆ドラッグによる物理干渉。
+*   **パフォーマンス最適化**:
+    *   Canvas APIによる描画。
+    *   空間分割法（Spatial Partitioning / Grid法）を用いた高速な衝突判定の実装。
 
-## Run Locally
+### 2. ジェネレーティブ・オーディオ (SoundSystem)
+Web Audio APIを直接操作し、サンプル音源を使用せずリアルタイムに波形を合成しています。
 
-**Prerequisites:**  Node.js
+*   **アンビエントドローン**: バックグラウンドで鳴り続ける持続音（Sine波 + 低周波）。
+*   **インタラクション音**: マウス操作や粒子の高速移動時にペンタトニックスケール（C Minor）の旋律を奏でる。
+*   **衝突音**: 粒子同士が衝突した際に、ガラスのような短く高い音（Percussive Sine）を生成。
+    *   *Throttling*: 大量の衝突による音割れを防ぐため、発音数と確率は動的に制限されています。
+*   **リバーブ**: `ConvolverNode` を使用し、プログラムで生成したインパルス応答による深い残響効果を付与。
+*   **自動再生ポリシー対応**: 画面上のあらゆるクリック/タップイベントを検知して `AudioContext` をResumeする仕組みを実装。
 
+### 3. UI / UX
+*   **Glassmorphism Design**: Tailwind CSSを用いた透明感のあるモダンなUI。
+*   **リアルタイム解析**: Rechartsを用いた個体数推移の可視化。
+*   **設定管理**: 密度、引力係数、音量などのパラメータをサイドバーで即座に変更・反映。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## ファイル構成と役割
+
+### `components/SimulationCanvas.tsx`
+アプリケーションのコアとなるコンポーネント。
+*   **描画ループ**: `requestAnimationFrame` を用いたメインループ。
+*   **物理演算**: 粒子の位置更新、境界処理、グリッドベースの衝突判定。
+*   **SoundSystemクラス**: 音響合成ロジックのカプセル化。
+
+### `components/Sidebar.tsx`
+シミュレーションのパラメータを制御するUIコンポーネント。
+*   スライダーによる密度や引力の調整。
+*   Rechartsによるグラフ描画。
+
+### `types.ts`
+型定義ファイル。
+*   `Particle`: 粒子のプロパティ（位置、速度、色、種類など）。
+*   `SimulationConfig`: アプリケーション全体の状態設定。
+
+### `App.tsx`
+ルートコンポーネント。
+*   状態管理（Config, Stats）を行い、CanvasとSidebarへPropsを渡す。
+*   レイアウトおよび背景エフェクトの定義。
+
+## 今後の拡張アイデア（引き継ぎ用）
+1.  **新しい粒子タイプの追加**: 現在は3種類ですが、特性の異なる新しい粒子の追加。
+2.  **オーディオパターンの拡張**: 現在はペンタトニックスケールのみですが、和音や異なるスケールの導入。
+3.  **保存機能**: 現在の設定値を `localStorage` やJSONファイルとして保存・読み込みする機能。
+4.  **WebGL化**: 現在はCanvas 2D Contextを使用していますが、粒子数が数万を超える場合はPixiJSやThree.jsへの移行を検討。
+
+## 開発環境
+*   React 19
+*   TypeScript
+*   Tailwind CSS
+*   Vite (想定)
+
+## インストールと実行
+通常のReactプロジェクトとして実行可能です。
+
+```bash
+npm install
+npm run dev
+```
