@@ -28,8 +28,7 @@ class SoundSystem {
     this.reverb = this.ctx.createConvolver();
     this.generateReverbImpulse();
 
-    // Routing: Source -> Master -> Reverb -> Destination
-    //                   |-> Destination (Dry)
+    // Routing
     this.masterGain.connect(this.ctx.destination);
     this.masterGain.connect(this.reverb);
     this.reverb.connect(this.ctx.destination);
@@ -37,12 +36,11 @@ class SoundSystem {
 
   generateReverbImpulse() {
     const rate = this.ctx.sampleRate;
-    const length = rate * 3; // 3 seconds tail
+    const length = rate * 3;
     const impulse = this.ctx.createBuffer(2, length, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
     for (let i = 0; i < length; i++) {
-      // Exponential decay
       const n = length - i;
       const decay = Math.pow(n / length, 3);
       left[i] = (Math.random() * 2 - 1) * decay * 0.5;
@@ -52,7 +50,6 @@ class SoundSystem {
   }
 
   setVolume(vol: number, enabled: boolean) {
-    // Boosted volume scalar (0.3 -> 0.8) to make it more audible
     const target = enabled ? (vol / 100) * 0.8 : 0;
     this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.2);
   }
@@ -69,14 +66,11 @@ class SoundSystem {
   }
 
   startDrone() {
-    // Deep background drone
     this.droneOsc = this.ctx.createOscillator();
     this.droneGain = this.ctx.createGain();
 
     this.droneOsc.type = 'sine';
-    this.droneOsc.frequency.value = 55; // Low A
-
-    // Boosted drone gain
+    this.droneOsc.frequency.value = 55;
     this.droneGain.gain.value = 0.15;
 
     this.droneOsc.connect(this.droneGain);
@@ -93,16 +87,13 @@ class SoundSystem {
 
     osc.type = type;
     osc.frequency.setValueAtTime(note, this.ctx.currentTime);
-
-    // Random pan for spatial width
     pan.pan.value = Math.random() * 2 - 1;
 
-    // Envelope
     const now = this.ctx.currentTime;
     const duration = 0.5 + Math.random() * 0.5;
 
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.2 * velocity, now + 0.05); // Boosted attack level
+    gain.gain.linearRampToValueAtTime(0.2 * velocity, now + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     osc.connect(gain);
@@ -116,21 +107,18 @@ class SoundSystem {
   playCollisionSound() {
     if (this.ctx.state === 'suspended') return;
 
-    // Short, percussive "glass" sound
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    // Pitch range
     const baseFreq = 600 + Math.random() * 600;
     osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
     osc.type = 'sine';
 
     const now = this.ctx.currentTime;
 
-    // Envelope - slightly longer and louder
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.15, now + 0.02); // Louder click
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15); // Slightly longer tail
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
@@ -142,14 +130,8 @@ class SoundSystem {
 
 // Pentatonic Scale (C Minor)
 const SCALE = [
-  261.63, // C4
-  311.13, // Eb4
-  349.23, // F4
-  392.00, // G4
-  466.16, // Bb4
-  523.25, // C5
-  622.25, // Eb5
-  783.99  // G5
+  261.63, 311.13, 349.23, 392.00,
+  466.16, 523.25, 622.25, 783.99
 ];
 
 const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpdate, shuffleTrigger, stepTrigger }) => {
@@ -160,6 +142,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   const mousePosRef = useRef({ x: 0, y: 0 });
   const isMouseDownRef = useRef(false);
   const fpsRef = useRef<{ frames: number; lastTime: number }>({ frames: 0, lastTime: performance.now() });
+  const statsUpdateTimeRef = useRef<number>(0);
 
   // Audio Refs
   const soundSystemRef = useRef<SoundSystem | null>(null);
@@ -176,7 +159,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   useEffect(() => {
     soundSystemRef.current = new SoundSystem();
 
-    // Global resume handler - ensures audio starts on ANY interaction, not just canvas
     const handleInteraction = () => {
       soundSystemRef.current?.resume();
     };
@@ -209,9 +191,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     for (let i = 0; i < count; i++) {
       const rand = Math.random();
       const type = rand > 0.66 ? 'alpha' : rand > 0.33 ? 'beta' : 'gamma';
-      let color = '#f472b6'; // Alpha Pink
-      if (type === 'beta') color = '#22d3ee'; // Beta Cyan
-      if (type === 'gamma') color = '#facc15'; // Gamma Yellow
+      let color = '#f472b6';
+      if (type === 'beta') color = '#22d3ee';
+      if (type === 'gamma') color = '#facc15';
 
       newParticles.push({
         x: Math.random() * width,
@@ -239,18 +221,31 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     }
   }, [shuffleTrigger, initParticles]);
 
+  // Calculate sound probability based on density (more particles = less sound per collision)
+  // New range: 0-1000 particles for better audio clarity
+  const getSoundProbability = useCallback(() => {
+    const density = configRef.current.density;
+    // At 0-100 particles: 80% chance - very clear individual sounds
+    // At 100-300 particles: 50% chance - balanced audio
+    // At 300-600 particles: 30% chance - moderate density
+    // At 600-1000 particles: 15% chance - still audible but controlled
+    if (density < 100) return 0.8;
+    if (density < 300) return 0.5;
+    if (density < 600) return 0.3;
+    return 0.15;
+  }, []);
+
   // Run single physics step
   const runPhysicsStep = useCallback((time: number, width: number, height: number) => {
     const cfg = configRef.current;
     const center = { x: width / 2, y: height / 2 };
+    const soundProb = getSoundProbability();
 
-    // --- Spatial Partitioning for Collision Detection ---
     const cellSize = 30;
     const grid: Record<string, number[]> = {};
 
     // 1. Update Positions & Build Grid
     particlesRef.current.forEach((p, i) => {
-      // Movement
       p.x += p.vx;
       p.y += p.vy;
 
@@ -264,8 +259,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
           p.vx += (dx / dist) * force * 0.5;
           p.vy += (dy / dist) * force * 0.5;
 
-          // Audio Trigger on rapid movement near mouse
-          if (Math.random() > 0.98 && time - lastSoundTimeRef.current > 100) {
+          // Sound with density-based probability
+          if (Math.random() < soundProb * 0.3 && time - lastSoundTimeRef.current > 150) {
             const note = SCALE[Math.floor(Math.random() * SCALE.length)];
             soundSystemRef.current?.playTone(note, 'sine', 0.8);
             lastSoundTimeRef.current = time;
@@ -282,7 +277,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         p.vy += (dyC / distC) * 0.01;
       }
 
-      // Type Interaction with all three particle types
+      // Type Interaction
       if (p.type === 'alpha') {
         p.vx += Math.sin(p.y * 0.01) * (cfg.alphaAttraction * 0.05);
         p.vy += Math.cos(p.x * 0.01) * (cfg.alphaAttraction * 0.03);
@@ -312,12 +307,13 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       grid[key].push(i);
     });
 
-    // 2. Collision Detection
+    // 2. Collision Detection with density-based sound throttling
+    const minCollisionSoundInterval = cfg.density > 3000 ? 100 : cfg.density > 1000 ? 60 : 40;
+
     particlesRef.current.forEach((p, i) => {
       const col = Math.floor(p.x / cellSize);
       const row = Math.floor(p.y / cellSize);
 
-      // Check 3x3 grid neighborhood
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           const key = `${col + dx},${row + dy}`;
@@ -343,7 +339,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
                 p2.x -= nx * overlap;
                 p2.y -= ny * overlap;
 
-                if (time - lastCollisionSoundTimeRef.current > 40 && Math.random() < 0.3) {
+                // Sound with density-based throttling
+                if (time - lastCollisionSoundTimeRef.current > minCollisionSoundInterval && Math.random() < soundProb) {
                   soundSystemRef.current?.playCollisionSound();
                   lastCollisionSoundTimeRef.current = time;
                 }
@@ -353,7 +350,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         }
       }
     });
-  }, []);
+  }, [getSoundProbability]);
 
   // Step forward trigger (when paused)
   useEffect(() => {
@@ -388,21 +385,31 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       // FPS Calculation
       fpsRef.current.frames++;
       if (time - fpsRef.current.lastTime >= 1000) {
-        const alphaCount = particlesRef.current.filter(p => p.type === 'alpha').length;
-        const betaCount = particlesRef.current.filter(p => p.type === 'beta').length;
-        const gammaCount = particlesRef.current.filter(p => p.type === 'gamma').length;
-
         onStatsUpdate({
           fps: fpsRef.current.frames,
-          alpha: alphaCount,
-          beta: betaCount,
-          gamma: gammaCount
+          alpha: particlesRef.current.filter(p => p.type === 'alpha').length,
+          beta: particlesRef.current.filter(p => p.type === 'beta').length,
+          gamma: particlesRef.current.filter(p => p.type === 'gamma').length
         });
         fpsRef.current.frames = 0;
         fpsRef.current.lastTime = time;
       }
 
-      // Clear Canvas with trail effect
+      // More frequent stats update for chart (every 500ms)
+      if (time - statsUpdateTimeRef.current >= 500) {
+        onStatsUpdate({
+          fps: Math.round(fpsRef.current.frames * 2), // estimate
+          alpha: particlesRef.current.filter(p => p.type === 'alpha').length,
+          beta: particlesRef.current.filter(p => p.type === 'beta').length,
+          gamma: particlesRef.current.filter(p => p.type === 'gamma').length
+        });
+        statsUpdateTimeRef.current = time;
+      }
+
+      // Clear Canvas - ALWAYS clear shadow first to prevent color bleed
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+
       if (cfg.showTrails) {
         ctx.fillStyle = `rgba(2, 2, 4, ${cfg.trailLength})`;
       } else {
@@ -415,24 +422,36 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         runPhysicsStep(time, width, height);
       }
 
-      // Draw particles
-      ctx.shadowBlur = 0; // Reset shadow
+      // Draw particles - batch by shadow state to minimize context switches
+      // First draw small particles (no shadow)
       particlesRef.current.forEach((p) => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        if (p.radius > 1.5) {
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = p.color;
-        } else {
-          ctx.shadowBlur = 0;
+        if (p.radius <= 1.5) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
         }
-        ctx.fill();
-        ctx.closePath();
       });
 
-      // Random Ambient Sparkles
-      if (cfg.isPlaying && Math.random() > 0.99 && time - lastSoundTimeRef.current > 200) {
+      // Then draw large particles with glow
+      ctx.shadowBlur = 10;
+      particlesRef.current.forEach((p) => {
+        if (p.radius > 1.5) {
+          ctx.shadowColor = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
+      });
+
+      // Reset shadow after drawing
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+
+      // Random Ambient Sparkles - also density based
+      const sparkleProb = cfg.density > 3000 ? 0.995 : cfg.density > 1000 ? 0.99 : 0.98;
+      if (cfg.isPlaying && Math.random() > sparkleProb && time - lastSoundTimeRef.current > 300) {
         const note = SCALE[Math.floor(Math.random() * (SCALE.length / 2))];
         soundSystemRef.current?.playTone(note * 0.5, 'triangle', 0.3);
         lastSoundTimeRef.current = time;

@@ -15,22 +15,22 @@ const PRESETS: Preset[] = [
   {
     name: 'Harmony',
     icon: 'self_improvement',
-    config: { alphaAttraction: 0.5, betaAttraction: 0.5, gammaAttraction: 0.5, density: 3000 }
+    config: { alphaAttraction: 0.5, betaAttraction: 0.5, gammaAttraction: 0.5, density: 500 }
   },
   {
     name: 'Chaos',
     icon: 'whatshot',
-    config: { alphaAttraction: -0.8, betaAttraction: 0.9, gammaAttraction: -0.7, density: 5000 }
+    config: { alphaAttraction: -0.8, betaAttraction: 0.9, gammaAttraction: -0.7, density: 800 }
   },
   {
     name: 'Vortex',
     icon: 'cyclone',
-    config: { alphaAttraction: 1.0, betaAttraction: -1.0, gammaAttraction: 0.8, density: 4000 }
+    config: { alphaAttraction: 1.0, betaAttraction: -1.0, gammaAttraction: 0.8, density: 600 }
   },
   {
     name: 'Calm',
     icon: 'spa',
-    config: { alphaAttraction: 0.2, betaAttraction: 0.2, gammaAttraction: 0.2, density: 2000, showTrails: true, trailLength: 0.05 }
+    config: { alphaAttraction: 0.2, betaAttraction: 0.2, gammaAttraction: 0.2, density: 300, showTrails: true, trailLength: 0.05 }
   },
 ];
 
@@ -98,9 +98,9 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
             </div>
             <input
               type="range"
-              min="100"
-              max="10000"
-              step="100"
+              min="0"
+              max="1000"
+              step="10"
               value={config.density}
               onChange={(e) => handleChange('density', Number(e.target.value))}
               className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer group-hover:bg-gray-600 transition-colors"
