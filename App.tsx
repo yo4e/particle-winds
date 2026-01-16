@@ -145,6 +145,16 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   }, []);
 
+  const handleRecordingError = useCallback((message: string) => {
+    console.error(message);
+    setIsRecording(false);
+    setRecordingTimeLeft(0);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
@@ -234,6 +244,7 @@ const App: React.FC = () => {
             stepTrigger={stepTrigger}
             isRecording={isRecording}
             onRecordingComplete={handleRecordingComplete}
+            onRecordingError={handleRecordingError}
           />
 
           {/* Overlay Stats */}

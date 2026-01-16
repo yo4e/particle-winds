@@ -8,6 +8,7 @@ interface SimulationCanvasProps {
   stepTrigger: number;
   isRecording: boolean;
   onRecordingComplete: (blob: Blob) => void;
+  onRecordingError: (message: string) => void;
 }
 
 // --- Audio System ---
@@ -193,7 +194,7 @@ const SCALE = [
   466.16, 523.25, 622.25, 783.99
 ];
 
-const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpdate, shuffleTrigger, stepTrigger, isRecording, onRecordingComplete }) => {
+const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpdate, shuffleTrigger, stepTrigger, isRecording, onRecordingComplete, onRecordingError }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -216,6 +217,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   // Recording Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
 
   // Store config ref for animation loop
   const configRef = useRef(config);
@@ -229,10 +231,33 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     if (!canvas) return;
 
     if (isRecording && !mediaRecorderRef.current) {
+      if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
+        onRecordingError('Recording is not supported in this browser.');
+        return;
+      }
+
       // Start recording
       const stream = canvas.captureStream(30); // 30 FPS
+      recordingStreamRef.current = stream;
+
+      const preferredTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+      ];
+      const supportedType = preferredTypes.find((type) =>
+        typeof MediaRecorder.isTypeSupported === 'function' ? MediaRecorder.isTypeSupported(type) : true
+      );
+
+      if (!supportedType) {
+        onRecordingError('No supported recording format found.');
+        recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        return;
+      }
+
       const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
+        mimeType: supportedType,
         videoBitsPerSecond: 5000000, // 5 Mbps for good quality
       });
 
@@ -244,10 +269,18 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         }
       };
 
+      recorder.onerror = () => {
+        onRecordingError('Recording failed to start.');
+      };
+
       recorder.onstop = () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         onRecordingComplete(blob);
         mediaRecorderRef.current = null;
+        if (recordingStreamRef.current) {
+          recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+          recordingStreamRef.current = null;
+        }
       };
 
       recorder.start(100); // Collect data every 100ms
@@ -256,7 +289,16 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       // Stop recording
       mediaRecorderRef.current.stop();
     }
-  }, [isRecording, onRecordingComplete]);
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordingStreamRef.current) {
+        recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+      }
+    };
+  }, [isRecording, onRecordingComplete, onRecordingError]);
 
 
 
