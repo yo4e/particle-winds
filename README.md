@@ -1,5 +1,7 @@
 # Particle Winds
 
+🎮 **[Live Demo](https://particle-winds.vercel.app/)** 
+
 A mesmerizing interactive particle simulation with generative audio. Watch thousands of particles flow, collide, and respond to your touch.
 
 ## Features
