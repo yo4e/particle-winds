@@ -60,9 +60,10 @@ class SoundSystem {
         console.log("Audio Context Resumed");
       }).catch(e => console.error(e));
     }
-    if (!this.droneOsc) {
-      this.startDrone();
-    }
+    // Drone sound disabled for now - uncomment to re-enable
+    // if (!this.droneOsc) {
+    //   this.startDrone();
+    // }
   }
 
   startDrone() {
@@ -104,27 +105,51 @@ class SoundSystem {
     osc.stop(now + duration);
   }
 
-  playCollisionSound() {
-    if (this.ctx.state === 'suspended') return;
+  // Each particle type has its own note - collisions create chords!
+  // Alpha = C5 (523Hz), Beta = E5 (659Hz), Gamma = G4 (392Hz)
+  // Together they form a C major chord
+  private typeFrequencies: Record<string, number> = {
+    alpha: 523.25,  // C5 - bright, high
+    beta: 659.25,   // E5 - mid, warm
+    gamma: 392.00,  // G4 - low, grounding
+  };
 
+  // Play a single note for one particle type
+  private playNote(type: 'alpha' | 'beta' | 'gamma') {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    const baseFreq = 600 + Math.random() * 600;
-    osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+    const freq = this.typeFrequencies[type] || 440;
+    // Add slight random variation for organic feel (±2%)
+    const variation = 1 + (Math.random() - 0.5) * 0.04;
+
+    osc.frequency.setValueAtTime(freq * variation, this.ctx.currentTime);
     osc.type = 'sine';
 
     const now = this.ctx.currentTime;
 
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start(now);
-    osc.stop(now + 0.2);
+    osc.stop(now + 0.25);
+  }
+
+  // When two particles collide, both play their notes → chord!
+  playCollisionSound(type1?: 'alpha' | 'beta' | 'gamma', type2?: 'alpha' | 'beta' | 'gamma') {
+    if (this.ctx.state === 'suspended') return;
+
+    // Each particle plays its own note
+    if (type1) this.playNote(type1);
+    if (type2 && type2 !== type1) this.playNote(type2);
+    // If same type collision (e.g., alpha-alpha), just play once
+    if (type2 && type2 === type1) {
+      // Already played above, maybe add slight octave variation?
+    }
   }
 }
 
@@ -148,6 +173,10 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   const soundSystemRef = useRef<SoundSystem | null>(null);
   const lastSoundTimeRef = useRef<number>(0);
   const lastCollisionSoundTimeRef = useRef<number>(0);
+
+  // Wind Gust System - keeps things dynamic!
+  const nextGustTimeRef = useRef<number>(0);
+  const currentWindRef = useRef({ vx: 0, vy: 0, strength: 0, decay: 0.95 });
 
   // Store config ref for animation loop
   const configRef = useRef(config);
@@ -244,8 +273,35 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     const cellSize = 30;
     const grid: Record<string, number[]> = {};
 
+    // 0. Wind Gust System - Random gusts every 3-8 seconds
+    const wind = currentWindRef.current;
+    if (time > nextGustTimeRef.current) {
+      // Trigger a new gust!
+      const angle = Math.random() * Math.PI * 2;
+      wind.vx = Math.cos(angle);
+      wind.vy = Math.sin(angle);
+      wind.strength = 2 + Math.random() * 3; // Random strength 2-5
+      wind.decay = 0.92 + Math.random() * 0.05; // Decay rate 0.92-0.97
+
+      // Schedule next gust in 3-8 seconds
+      nextGustTimeRef.current = time + 3000 + Math.random() * 5000;
+    }
+
+    // Apply wind and decay
+    if (wind.strength > 0.1) {
+      wind.strength *= wind.decay;
+    } else {
+      wind.strength = 0;
+    }
+
     // 1. Update Positions & Build Grid
     particlesRef.current.forEach((p, i) => {
+      // Apply wind force to this particle
+      if (wind.strength > 0.1) {
+        p.vx += wind.vx * wind.strength * 0.1;
+        p.vy += wind.vy * wind.strength * 0.1;
+      }
+
       p.x += p.vx;
       p.y += p.vy;
 
@@ -308,7 +364,11 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
     });
 
     // 2. Collision Detection with density-based sound throttling
+    // Plus: Same-type repulsion & Cross-type attraction
     const minCollisionSoundInterval = cfg.density > 3000 ? 100 : cfg.density > 1000 ? 60 : 40;
+    const interactionRadius = 60; // Radius for type-based forces
+    const sameTypeRepulsion = 0.15; // Strength of same-type repulsion
+    const crossTypeAttraction = 0.08; // Strength of cross-type attraction
 
     particlesRef.current.forEach((p, i) => {
       const col = Math.floor(p.x / cellSize);
@@ -328,6 +388,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
               const distSq = distX * distX + distY * distY;
               const minDist = p.radius + p2.radius;
 
+              // Physical collision
               if (distSq < minDist * minDist) {
                 const dist = Math.sqrt(distSq) || 0.1;
                 const overlap = (minDist - dist) / 2;
@@ -339,10 +400,34 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
                 p2.x -= nx * overlap;
                 p2.y -= ny * overlap;
 
-                // Sound with density-based throttling
+                // Sound with density-based throttling - pass particle types for different sounds
                 if (time - lastCollisionSoundTimeRef.current > minCollisionSoundInterval && Math.random() < soundProb) {
-                  soundSystemRef.current?.playCollisionSound();
+                  soundSystemRef.current?.playCollisionSound(p.type, p2.type);
                   lastCollisionSoundTimeRef.current = time;
+                }
+              }
+
+              // Type-based forces (within interaction radius, beyond collision)
+              if (distSq < interactionRadius * interactionRadius && distSq > minDist * minDist) {
+                const dist = Math.sqrt(distSq);
+                const nx = distX / dist;
+                const ny = distY / dist;
+                const forceFalloff = 1 - (dist / interactionRadius); // Stronger when closer
+
+                if (p.type === p2.type) {
+                  // SAME TYPE: Repulsion - push apart
+                  const repelForce = sameTypeRepulsion * forceFalloff;
+                  p.vx += nx * repelForce;
+                  p.vy += ny * repelForce;
+                  p2.vx -= nx * repelForce;
+                  p2.vy -= ny * repelForce;
+                } else {
+                  // DIFFERENT TYPE: Attraction - pull together (weaker)
+                  const attractForce = crossTypeAttraction * forceFalloff;
+                  p.vx -= nx * attractForce;
+                  p.vy -= ny * attractForce;
+                  p2.vx += nx * attractForce;
+                  p2.vy += ny * attractForce;
                 }
               }
             }
