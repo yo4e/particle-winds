@@ -167,6 +167,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   const mousePosRef = useRef({ x: 0, y: 0 });
   const isMouseDownRef = useRef(false);
   const fpsRef = useRef<{ frames: number; lastTime: number }>({ frames: 0, lastTime: performance.now() });
+  const fpsValueRef = useRef<number>(60);
   const statsUpdateTimeRef = useRef<number>(0);
 
   // Audio Refs
@@ -469,13 +470,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
 
       // FPS Calculation
       fpsRef.current.frames++;
-      if (time - fpsRef.current.lastTime >= 1000) {
-        onStatsUpdate({
-          fps: fpsRef.current.frames,
-          alpha: particlesRef.current.filter(p => p.type === 'alpha').length,
-          beta: particlesRef.current.filter(p => p.type === 'beta').length,
-          gamma: particlesRef.current.filter(p => p.type === 'gamma').length
-        });
+      const fpsDelta = time - fpsRef.current.lastTime;
+      if (fpsDelta >= 1000) {
+        fpsValueRef.current = Math.round((fpsRef.current.frames * 1000) / fpsDelta);
         fpsRef.current.frames = 0;
         fpsRef.current.lastTime = time;
       }
@@ -483,7 +480,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       // More frequent stats update for chart (every 500ms)
       if (time - statsUpdateTimeRef.current >= 500) {
         onStatsUpdate({
-          fps: Math.round(fpsRef.current.frames * 2), // estimate
+          fps: fpsValueRef.current,
           alpha: particlesRef.current.filter(p => p.type === 'alpha').length,
           beta: particlesRef.current.filter(p => p.type === 'beta').length,
           gamma: particlesRef.current.filter(p => p.type === 'gamma').length

@@ -91,11 +91,13 @@ const App: React.FC = () => {
   // Toggle fullscreen
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
+      document.documentElement.requestFullscreen().catch((e) => {
+        console.error('Failed to enter fullscreen:', e);
+      });
     } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+      document.exitFullscreen().catch((e) => {
+        console.error('Failed to exit fullscreen:', e);
+      });
     }
   }, []);
 
