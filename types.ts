@@ -28,10 +28,8 @@ export interface Preset {
   config: Partial<SimulationConfig>;
 }
 
-// NEW: Population history for real-time chart
-export interface PopulationSnapshot {
+// Wind strength history for real-time chart
+export interface WindSnapshot {
   time: number;
-  alpha: number;
-  beta: number;
-  gamma: number;
+  strength: number;
 }

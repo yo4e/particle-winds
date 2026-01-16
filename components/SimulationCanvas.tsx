@@ -3,9 +3,11 @@ import { SimulationConfig, Particle } from '../types';
 
 interface SimulationCanvasProps {
   config: SimulationConfig;
-  onStatsUpdate: (stats: { alpha: number; beta: number; gamma: number; fps: number }) => void;
+  onStatsUpdate: (stats: { alpha: number; beta: number; gamma: number; fps: number; windStrength: number }) => void;
   shuffleTrigger: number;
   stepTrigger: number;
+  isRecording: boolean;
+  onRecordingComplete: (blob: Blob) => void;
 }
 
 // --- Audio System ---
@@ -14,8 +16,6 @@ class SoundSystem {
   masterGain: GainNode;
   reverb: ConvolverNode;
   isInitialized: boolean = false;
-  droneOsc: OscillatorNode | null = null;
-  droneGain: GainNode | null = null;
 
   constructor() {
     const Ctx = window.AudioContext || (window as any).webkitAudioContext;
@@ -60,23 +60,6 @@ class SoundSystem {
         console.log("Audio Context Resumed");
       }).catch(e => console.error(e));
     }
-    // Drone sound disabled for now - uncomment to re-enable
-    // if (!this.droneOsc) {
-    //   this.startDrone();
-    // }
-  }
-
-  startDrone() {
-    this.droneOsc = this.ctx.createOscillator();
-    this.droneGain = this.ctx.createGain();
-
-    this.droneOsc.type = 'sine';
-    this.droneOsc.frequency.value = 55;
-    this.droneGain.gain.value = 0.15;
-
-    this.droneOsc.connect(this.droneGain);
-    this.droneGain.connect(this.masterGain);
-    this.droneOsc.start();
   }
 
   playTone(note: number, type: 'sine' | 'triangle' = 'sine', velocity: number = 1) {
@@ -114,16 +97,70 @@ class SoundSystem {
     gamma: 392.00,  // G4 - low, grounding
   };
 
+  // Type-specific cooldowns to prevent same note spam
+  private typeCooldowns: Record<string, number> = {
+    alpha: 0,
+    beta: 0,
+    gamma: 0,
+  };
+  private readonly TYPE_COOLDOWN_MS = 150; // Minimum ms between same type sounds
+
+  // LFO for slowly shifting base pitch (prevents monotony over time)
+  private lfoPhase = 0;
+  private readonly LFO_PERIOD = 15000; // 15 seconds full cycle
+  private readonly LFO_DEPTH = 0.05;   // ±5% pitch variation
+
+  // Get current LFO multiplier for pitch
+  private getLfoMultiplier(): number {
+    const now = performance.now();
+    this.lfoPhase = (now % this.LFO_PERIOD) / this.LFO_PERIOD;
+    // Smooth sine wave: 0.95 to 1.05 range
+    return 1 + Math.sin(this.lfoPhase * Math.PI * 2) * this.LFO_DEPTH;
+  }
+
+  // Check if this type can play (cooldown check)
+  private canPlayType(type: string): boolean {
+    const now = performance.now();
+    if (now - this.typeCooldowns[type] < this.TYPE_COOLDOWN_MS) {
+      return false;
+    }
+    this.typeCooldowns[type] = now;
+    return true;
+  }
+
+  // Global sound rate limiting - max N sounds per time window
+  private soundTimestamps: number[] = [];
+  private readonly MAX_SOUNDS_PER_WINDOW = 5;  // Max 5 sounds
+  private readonly SOUND_WINDOW_MS = 100;       // per 100ms
+
+  private canPlayGlobal(): boolean {
+    const now = performance.now();
+    // Remove old timestamps outside the window
+    this.soundTimestamps = this.soundTimestamps.filter(t => now - t < this.SOUND_WINDOW_MS);
+
+    if (this.soundTimestamps.length >= this.MAX_SOUNDS_PER_WINDOW) {
+      return false; // Rate limit exceeded
+    }
+    this.soundTimestamps.push(now);
+    return true;
+  }
+
   // Play a single note for one particle type
   private playNote(type: 'alpha' | 'beta' | 'gamma') {
+    // Check type-specific cooldown AND global rate limit
+    if (!this.canPlayType(type)) return;
+    if (!this.canPlayGlobal()) return;
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    const freq = this.typeFrequencies[type] || 440;
-    // Add slight random variation for organic feel (±2%)
-    const variation = 1 + (Math.random() - 0.5) * 0.04;
+    const baseFreq = this.typeFrequencies[type] || 440;
+    // Apply LFO for slow pitch drift + random micro-variation
+    const lfoMult = this.getLfoMultiplier();
+    const randomVariation = 1 + (Math.random() - 0.5) * 0.02; // ±1% random
+    const freq = baseFreq * lfoMult * randomVariation;
 
-    osc.frequency.setValueAtTime(freq * variation, this.ctx.currentTime);
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
     osc.type = 'sine';
 
     const now = this.ctx.currentTime;
@@ -143,13 +180,10 @@ class SoundSystem {
   playCollisionSound(type1?: 'alpha' | 'beta' | 'gamma', type2?: 'alpha' | 'beta' | 'gamma') {
     if (this.ctx.state === 'suspended') return;
 
-    // Each particle plays its own note
+    // Each particle plays its own note (with cooldown check inside playNote)
     if (type1) this.playNote(type1);
     if (type2 && type2 !== type1) this.playNote(type2);
-    // If same type collision (e.g., alpha-alpha), just play once
-    if (type2 && type2 === type1) {
-      // Already played above, maybe add slight octave variation?
-    }
+    // If same type collision, playNote already handles it
   }
 }
 
@@ -159,7 +193,7 @@ const SCALE = [
   466.16, 523.25, 622.25, 783.99
 ];
 
-const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpdate, shuffleTrigger, stepTrigger }) => {
+const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpdate, shuffleTrigger, stepTrigger, isRecording, onRecordingComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -179,11 +213,52 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
   const nextGustTimeRef = useRef<number>(0);
   const currentWindRef = useRef({ vx: 0, vy: 0, strength: 0, decay: 0.95 });
 
+  // Recording Refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
   // Store config ref for animation loop
   const configRef = useRef(config);
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  // Recording effect - start/stop based on isRecording prop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (isRecording && !mediaRecorderRef.current) {
+      // Start recording
+      const stream = canvas.captureStream(30); // 30 FPS
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 5000000, // 5 Mbps for good quality
+      });
+
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        onRecordingComplete(blob);
+        mediaRecorderRef.current = null;
+      };
+
+      recorder.start(100); // Collect data every 100ms
+      mediaRecorderRef.current = recorder;
+    } else if (!isRecording && mediaRecorderRef.current) {
+      // Stop recording
+      mediaRecorderRef.current.stop();
+    }
+  }, [isRecording, onRecordingComplete]);
+
+
 
   // Initialize Audio Logic
   useEffect(() => {
@@ -334,16 +409,16 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         p.vy += (dyC / distC) * 0.01;
       }
 
-      // Type Interaction
+      // Type Interaction (flow patterns based on position)
       if (p.type === 'alpha') {
-        p.vx += Math.sin(p.y * 0.01) * (cfg.alphaAttraction * 0.05);
-        p.vy += Math.cos(p.x * 0.01) * (cfg.alphaAttraction * 0.03);
+        p.vx += Math.sin(p.y * 0.01) * (cfg.alphaAttraction * 0.3);
+        p.vy += Math.cos(p.x * 0.01) * (cfg.alphaAttraction * 0.2);
       } else if (p.type === 'beta') {
-        p.vx -= Math.cos(p.x * 0.01) * (cfg.betaAttraction * 0.05);
-        p.vy += Math.sin(p.y * 0.01) * (cfg.betaAttraction * 0.03);
+        p.vx -= Math.cos(p.x * 0.01) * (cfg.betaAttraction * 0.3);
+        p.vy += Math.sin(p.y * 0.01) * (cfg.betaAttraction * 0.2);
       } else if (p.type === 'gamma') {
-        p.vx += Math.cos(p.y * 0.015) * (cfg.gammaAttraction * 0.05);
-        p.vy -= Math.sin(p.x * 0.015) * (cfg.gammaAttraction * 0.03);
+        p.vx += Math.cos(p.y * 0.015) * (cfg.gammaAttraction * 0.3);
+        p.vy -= Math.sin(p.x * 0.015) * (cfg.gammaAttraction * 0.2);
       }
 
       // Damping
@@ -401,8 +476,13 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
                 p2.x -= nx * overlap;
                 p2.y -= ny * overlap;
 
-                // Sound with density-based throttling - pass particle types for different sounds
-                if (time - lastCollisionSoundTimeRef.current > minCollisionSoundInterval && Math.random() < soundProb) {
+                // Sound with density-based throttling + LOCAL density probability reduction
+                // More neighbors in this cell = lower probability of playing sound
+                const localDensity = neighbors.length;
+                const localDensityPenalty = Math.max(0.1, 1 - (localDensity / 20)); // At 20+ neighbors, only 10% chance
+                const adjustedProb = soundProb * localDensityPenalty;
+
+                if (time - lastCollisionSoundTimeRef.current > minCollisionSoundInterval && Math.random() < adjustedProb) {
                   soundSystemRef.current?.playCollisionSound(p.type, p2.type);
                   lastCollisionSoundTimeRef.current = time;
                 }
@@ -477,13 +557,14 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
         fpsRef.current.lastTime = time;
       }
 
-      // More frequent stats update for chart (every 500ms)
-      if (time - statsUpdateTimeRef.current >= 500) {
+      // More frequent stats update for chart (every 500ms) - only when playing
+      if (cfg.isPlaying && time - statsUpdateTimeRef.current >= 500) {
         onStatsUpdate({
           fps: fpsValueRef.current,
           alpha: particlesRef.current.filter(p => p.type === 'alpha').length,
           beta: particlesRef.current.filter(p => p.type === 'beta').length,
-          gamma: particlesRef.current.filter(p => p.type === 'gamma').length
+          gamma: particlesRef.current.filter(p => p.type === 'gamma').length,
+          windStrength: currentWindRef.current.strength
         });
         statsUpdateTimeRef.current = time;
       }
@@ -572,14 +653,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ config, onStatsUpda
       onMouseUp={() => { isMouseDownRef.current = false; }}
       onMouseLeave={() => { isMouseDownRef.current = false; }}
     >
-      {/* Background Image Overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-screen scale-110 animate-pulse-slow">
-        <img
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDL29YI2dcvoODThrvs4DSJDz6fTsnan_W2lM0fsdW2PSydTZg_8iXxduawD7UMJLsL5yFSrGeU8tfO-oOgsAq7ll3TMG1hvj_75wSlIazEgqXo3ZDAWbOcfnetgqLLPNelK4XrSCbd647mmDYkPjPRZeLpyYFiWrlQ6AjSMDX_NdsBV2qK_smkkVm_ukegZM5Ugmke7dlDt0NdTsWPvQOdpnn85ASTn__VgWNxU2ZuJdQVX1AV63NlLlPJZM_17lSMDDMg0PgBzik"
-          alt="Nebula"
-          className="w-full h-full object-cover"
-        />
-      </div>
+
 
       <canvas
         ref={canvasRef}

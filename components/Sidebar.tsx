@@ -1,13 +1,13 @@
 import React from 'react';
-import { SimulationConfig, PopulationSnapshot, Preset } from '../types';
-import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip, XAxis } from 'recharts';
+import { SimulationConfig, WindSnapshot, Preset } from '../types';
+import { AreaChart, Area, ResponsiveContainer, YAxis, XAxis } from 'recharts';
 
 interface SidebarProps {
   config: SimulationConfig;
   setConfig: React.Dispatch<React.SetStateAction<SimulationConfig>>;
-  populationHistory: PopulationSnapshot[];
-  onSave: () => void;
+  windHistory: WindSnapshot[];
   onReset: () => void;
+  onShuffle: () => void;
 }
 
 // Preset configurations
@@ -15,26 +15,26 @@ const PRESETS: Preset[] = [
   {
     name: 'Harmony',
     icon: 'self_improvement',
-    config: { alphaAttraction: 0.5, betaAttraction: 0.5, gammaAttraction: 0.5, density: 500 }
+    config: { alphaAttraction: 0.3, betaAttraction: 0.3, gammaAttraction: 0.3, density: 800, showTrails: true, trailLength: 0.15 }
   },
   {
     name: 'Chaos',
     icon: 'whatshot',
-    config: { alphaAttraction: -0.8, betaAttraction: 0.9, gammaAttraction: -0.7, density: 800 }
+    config: { alphaAttraction: -0.9, betaAttraction: 0.9, gammaAttraction: -0.6, density: 1500, showTrails: false, trailLength: 0.2 }
   },
   {
     name: 'Vortex',
     icon: 'cyclone',
-    config: { alphaAttraction: 1.0, betaAttraction: -1.0, gammaAttraction: 0.8, density: 600 }
+    config: { alphaAttraction: 0.8, betaAttraction: -0.8, gammaAttraction: 1.0, density: 1000, showTrails: true, trailLength: 0.08 }
   },
   {
     name: 'Calm',
     icon: 'spa',
-    config: { alphaAttraction: 0.2, betaAttraction: 0.2, gammaAttraction: 0.2, density: 300, showTrails: true, trailLength: 0.05 }
+    config: { alphaAttraction: 0.1, betaAttraction: 0.1, gammaAttraction: 0.1, density: 400, showTrails: true, trailLength: 0.03 }
   },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory, onSave, onReset }) => {
+const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, windHistory, onReset, onShuffle }) => {
   const handleChange = (key: keyof SimulationConfig, value: number | boolean) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
@@ -43,12 +43,10 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
     setConfig((prev) => ({ ...prev, ...preset.config }));
   };
 
-  // Transform population history for chart
-  const chartData = populationHistory.map((snap, i) => ({
+  // Transform wind history for chart
+  const chartData = windHistory.map((snap, i) => ({
     name: i,
-    alpha: snap.alpha,
-    beta: snap.beta,
-    gamma: snap.gamma,
+    wind: snap.strength,
   }));
 
   return (
@@ -63,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
 
         {/* Presets */}
         <section>
-          <h3 className="text-sm font-medium text-accent-purple uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-medium text-accent-blue uppercase tracking-wider mb-4 flex items-center gap-2">
             <span className="material-icons-round text-sm">palette</span> Presets
           </h3>
           <div className="grid grid-cols-4 gap-2">
@@ -111,10 +109,10 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
           </div>
         </section>
 
-        {/* Attraction Force */}
+        {/* Flow Dynamics */}
         <section>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-medium text-gray-200 uppercase tracking-wider">Attraction Force</h3>
+            <h3 className="text-sm font-medium text-gray-200 uppercase tracking-wider">Flow Dynamics</h3>
             <button
               onClick={onReset}
               className="text-xs text-primary hover:text-primary/80 transition-colors font-medium"
@@ -209,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
                   checked={config.showTrails}
                   onChange={(e) => handleChange('showTrails', e.target.checked)}
                 />
-                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-purple shadow-inner"></div>
+                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner"></div>
               </label>
             </div>
             {config.showTrails && (
@@ -232,55 +230,36 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
           </div>
         </section>
 
-        {/* Population Trends Chart (REAL DATA) */}
+        {/* Wind Strength Chart */}
         <section>
           <h3 className="text-sm font-medium text-gray-200 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <span className="material-icons-round text-sm">trending_up</span> Population Trends
+            <span className="material-icons-round text-sm">air</span> Wind Strength
           </h3>
-          <div className="bg-black/40 p-4 rounded-xl border border-white/5 relative h-36 flex items-center justify-center overflow-hidden shadow-inner">
-            <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMWgydjJIMUMxeiIgZmlsbD0iIzQ0NCIgZmlsbC1ydWxlPSJldmVub2RkIi8+PC9zdmc+')] mix-blend-overlay"></div>
+          <div className="bg-black/40 p-4 rounded-xl border border-white/5 relative h-28 flex items-center justify-center overflow-hidden shadow-inner">
             <div className="w-full h-full relative z-10">
               {chartData.length > 1 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData}>
                     <defs>
-                      <linearGradient id="colorAlpha" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f472b6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#f472b6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="colorBeta" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="colorWind" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.8} />
                         <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
                       </linearGradient>
-                      <linearGradient id="colorGamma" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#facc15" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#facc15" stopOpacity={0} />
-                      </linearGradient>
                     </defs>
                     <XAxis dataKey="name" hide />
-                    <YAxis hide domain={['auto', 'auto']} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'rgba(0,0,0,0.8)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '8px',
-                        fontSize: '11px'
-                      }}
-                      labelStyle={{ display: 'none' }}
-                    />
-                    <Area type="monotone" dataKey="alpha" stroke="#f472b6" strokeWidth={2} fillOpacity={1} fill="url(#colorAlpha)" name="Alpha" />
-                    <Area type="monotone" dataKey="beta" stroke="#22d3ee" strokeWidth={2} fillOpacity={1} fill="url(#colorBeta)" name="Beta" />
-                    <Area type="monotone" dataKey="gamma" stroke="#facc15" strokeWidth={2} fillOpacity={1} fill="url(#colorGamma)" name="Gamma" />
+                    <YAxis hide domain={[0, 5]} />
+                    <Area type="monotone" dataKey="wind" stroke="#22d3ee" strokeWidth={2} fillOpacity={1} fill="url(#colorWind)" name="Wind" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 text-xs">
                   <span className="material-icons-round text-lg mr-2 animate-pulse">hourglass_empty</span>
-                  Collecting data...
+                  Waiting for wind...
                 </div>
               )}
             </div>
           </div>
+          <p className="text-[10px] text-gray-500 mt-2 text-center">Gusts occur every 3-8 seconds</p>
         </section>
 
         {/* Celestial Harmonics */}
@@ -323,17 +302,51 @@ const Sidebar: React.FC<SidebarProps> = ({ config, setConfig, populationHistory,
             </div>
           </div>
         </section>
+
+        {/* How to Use */}
+        <section className="mt-4 pt-6 border-t border-white/5">
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <span className="material-icons-round text-sm">help_outline</span> How to Use
+          </h3>
+          <div className="text-[11px] text-gray-500 space-y-2 leading-relaxed">
+            <p><span className="text-gray-400">Click & Drag</span> on canvas to attract particles</p>
+            <p><span className="text-gray-400">Presets</span> quickly change simulation behavior</p>
+            <p><span className="text-gray-400">Entity Density</span> controls particle count</p>
+            <p><span className="text-gray-400">Flow Dynamics</span> controls particle movement patterns</p>
+            <p><span className="text-gray-400">Trail Effect</span> leaves glowing paths behind particles</p>
+            <p><span className="text-gray-400">REC button</span> records 8-second video (WebM)</p>
+            <p className="pt-2 text-gray-600 italic">Wind gusts occur randomly every 3-8 seconds</p>
+          </div>
+        </section>
       </div>
 
-      {/* Save Button */}
+      {/* Playback Controls */}
       <div className="p-6 border-t border-white/10 bg-black/40 backdrop-blur-md">
-        <button
-          onClick={onSave}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-accent-pink text-white font-bold tracking-wide shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] transform hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3 group"
-        >
-          <span className="material-icons-round text-lg group-hover:rotate-12 transition-transform">save</span>
-          SAVE CONFIGURATION
-        </button>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            onClick={onReset}
+            className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+            title="Reset All"
+          >
+            <span className="material-icons-round">restart_alt</span>
+          </button>
+          <button
+            onClick={onShuffle}
+            className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+            title="Shuffle"
+          >
+            <span className="material-icons-round">shuffle</span>
+          </button>
+          <button
+            onClick={() => setConfig(prev => ({ ...prev, isPlaying: !prev.isPlaying }))}
+            className="w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-accent-cyan text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_25px_rgba(59,130,246,0.5)]"
+            title={config.isPlaying ? 'Pause' : 'Play'}
+          >
+            <span className="material-icons-round text-3xl">
+              {config.isPlaying ? 'pause' : 'play_arrow'}
+            </span>
+          </button>
+        </div>
       </div>
     </aside>
   );

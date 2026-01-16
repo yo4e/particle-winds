@@ -1,73 +1,62 @@
-# Luminous Life (ルミナス・ライフ)
+# Particle Winds
 
-## 概要
-「Luminous Life」は、数千の粒子（人工生命）が相互作用する様子を視覚と聴覚で楽しむインタラクティブなシミュレーションアプリケーションです。
-React, TypeScript, HTML5 Canvas, Web Audio APIを用いて構築されており、ユーザーの操作やパラメータ設定に応じてリアルタイムに映像と音が生成されます。
+A mesmerizing interactive particle simulation with generative audio. Watch thousands of particles flow, collide, and respond to your touch.
 
-## 主な機能
+## Features
 
-### 1. ビジュアル・シミュレーション
-*   **多種粒子システム**: Alpha（ピンク）, Beta（シアン）, Gamma（イエロー）の3種類の粒子が存在。
-*   **物理相互作用**: 各粒子タイプ間の引力・斥力を `Sidebar` から調整可能。
-*   **マウスインタラクション**: カーソル付近の粒子に対する引力と、クリック＆ドラッグによる物理干渉。
-*   **パフォーマンス最適化**:
-    *   Canvas APIによる描画。
-    *   空間分割法（Spatial Partitioning / Grid法）を用いた高速な衝突判定の実装。
+### Visual Simulation
+- **Three Particle Types**: Alpha (pink), Beta (cyan), and Gamma (yellow) particles with unique behaviors
+- **Physics Interactions**: Adjustable attraction/repulsion forces between particle types
+- **Mouse Interaction**: Click & drag to attract particles toward cursor
+- **Wind System**: Random wind gusts every 3-8 seconds add organic movement
+- **Trail Effect**: Optional glowing trails behind particles
+- **Preset System**: Quick configurations (Harmony, Chaos, Vortex, Calm)
 
-### 2. ジェネレーティブ・オーディオ (SoundSystem)
-Web Audio APIを直接操作し、サンプル音源を使用せずリアルタイムに波形を合成しています。
+### Generative Audio
+- **Collision Sounds**: Particles play musical tones when colliding (C major chord: C5, E5, G4)
+- **LFO Pitch Drift**: Slow pitch variations prevent monotony
+- **Smart Throttling**: Sound rate limiting prevents audio overload at high densities
+- **Reverb**: Algorithmic reverb using ConvolverNode for atmospheric depth
 
-*   **アンビエントドローン**: バックグラウンドで鳴り続ける持続音（Sine波 + 低周波）。
-*   **インタラクション音**: マウス操作や粒子の高速移動時にペンタトニックスケール（C Minor）の旋律を奏でる。
-*   **衝突音**: 粒子同士が衝突した際に、ガラスのような短く高い音（Percussive Sine）を生成。
-    *   *Throttling*: 大量の衝突による音割れを防ぐため、発音数と確率は動的に制限されています。
-*   **リバーブ**: `ConvolverNode` を使用し、プログラムで生成したインパルス応答による深い残響効果を付与。
-*   **自動再生ポリシー対応**: 画面上のあらゆるクリック/タップイベントを検知して `AudioContext` をResumeする仕組みを実装。
+### Additional Features
+- **Video Recording**: 8-second WebM video capture with one click
+- **Real-time Wind Graph**: Visualize wind strength over time
+- **Fullscreen Mode**: Immersive viewing experience
+- **Collapsible Sidebar**: Hide controls for distraction-free viewing
 
-### 3. UI / UX
-*   **Glassmorphism Design**: Tailwind CSSを用いた透明感のあるモダンなUI。
-*   **リアルタイム解析**: Rechartsを用いた個体数推移の可視化。
-*   **設定管理**: 密度、引力係数、音量などのパラメータをサイドバーで即座に変更・反映。
+## Tech Stack
+- React 19 + TypeScript
+- HTML5 Canvas (2D Context)
+- Web Audio API
+- Tailwind CSS
+- Recharts (for graphs)
+- Vite
 
-## ファイル構成と役割
-
-### `components/SimulationCanvas.tsx`
-アプリケーションのコアとなるコンポーネント。
-*   **描画ループ**: `requestAnimationFrame` を用いたメインループ。
-*   **物理演算**: 粒子の位置更新、境界処理、グリッドベースの衝突判定。
-*   **SoundSystemクラス**: 音響合成ロジックのカプセル化。
-
-### `components/Sidebar.tsx`
-シミュレーションのパラメータを制御するUIコンポーネント。
-*   スライダーによる密度や引力の調整。
-*   Rechartsによるグラフ描画。
-
-### `types.ts`
-型定義ファイル。
-*   `Particle`: 粒子のプロパティ（位置、速度、色、種類など）。
-*   `SimulationConfig`: アプリケーション全体の状態設定。
-
-### `App.tsx`
-ルートコンポーネント。
-*   状態管理（Config, Stats）を行い、CanvasとSidebarへPropsを渡す。
-*   レイアウトおよび背景エフェクトの定義。
-
-## 今後の拡張アイデア（引き継ぎ用）
-1.  **新しい粒子タイプの追加**: 現在は3種類ですが、特性の異なる新しい粒子の追加。
-2.  **オーディオパターンの拡張**: 現在はペンタトニックスケールのみですが、和音や異なるスケールの導入。
-3.  **保存機能**: 現在の設定値を `localStorage` やJSONファイルとして保存・読み込みする機能。
-4.  **WebGL化**: 現在はCanvas 2D Contextを使用していますが、粒子数が数万を超える場合はPixiJSやThree.jsへの移行を検討。
-
-## 開発環境
-*   React 19
-*   TypeScript
-*   Tailwind CSS
-*   Vite (想定)
-
-## インストールと実行
-通常のReactプロジェクトとして実行可能です。
+## Getting Started
 
 ```bash
 npm install
 npm run dev
 ```
+
+Open http://localhost:3000 in your browser.
+
+## How to Use
+- **Click & Drag** on canvas to attract particles
+- **Presets** quickly change simulation behavior
+- **Entity Density** controls particle count (0-5000)
+- **Flow Dynamics** controls particle movement patterns
+- **Trail Effect** leaves glowing paths behind particles
+- **REC button** records 8-second video (WebM)
+
+## File Structure
+
+| File | Description |
+|------|-------------|
+| `App.tsx` | Root component, state management, recording logic |
+| `components/SimulationCanvas.tsx` | Canvas rendering, physics, audio system |
+| `components/Sidebar.tsx` | Control panel UI, presets, sliders |
+| `types.ts` | TypeScript type definitions |
+
+## License
+MIT
