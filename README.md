@@ -60,5 +60,8 @@ Open http://localhost:3000 in your browser.
 | `components/Sidebar.tsx` | Control panel UI, presets, sliders |
 | `types.ts` | TypeScript type definitions |
 
+## Acknowledgments
+Built with the help of AI ✨
+
 ## License
 MIT
