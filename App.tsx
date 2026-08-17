@@ -96,6 +96,30 @@ const App: React.FC = () => {
   // Hide hint after first interaction
   const [hasInteracted, setHasInteracted] = useState(false);
 
+  // Viewing mode removes all application chrome while keeping the artwork interactive.
+  const [viewingMode, setViewingMode] = useState(false);
+  const handleEnterViewingMode = useCallback(() => {
+    setViewingMode(true);
+    setSidebarVisible(false);
+    setHasInteracted(true);
+  }, []);
+
+  const handleExitViewingMode = useCallback(() => {
+    setViewingMode(false);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && viewingMode) {
+        event.preventDefault();
+        handleExitViewingMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewingMode, handleExitViewingMode]);
+
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTimeLeft, setRecordingTimeLeft] = useState(0);
@@ -176,64 +200,76 @@ const App: React.FC = () => {
       </div>
 
 
-      <div className="flex-1 relative flex flex-col p-6 z-10 h-full">
+      <div className={`flex-1 relative flex flex-col z-10 h-full transition-[padding] duration-300 ${viewingMode ? 'p-0' : 'p-6'}`}>
         {/* Header */}
-        <header className="flex justify-between items-center mb-6 shrink-0 z-50">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-primary flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.5)] border border-white/10 hover:scale-110 transition-transform cursor-pointer" onClick={handleShuffle}>
-              <span className="material-icons-round text-white text-2xl">air</span>
+        {!viewingMode && (
+          <header className="flex justify-between items-center mb-6 shrink-0 z-50">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-primary flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.5)] border border-white/10 hover:scale-110 transition-transform cursor-pointer" onClick={handleShuffle}>
+                <span className="material-icons-round text-white text-2xl">air</span>
+              </div>
+              <div>
+                <h1 className="font-display font-bold text-3xl tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                  PARTICLE WINDS
+                </h1>
+                <p className="text-xs text-accent-cyan uppercase tracking-[0.2em] font-medium drop-shadow-md">
+                  Harmonic Particle Flow
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-display font-bold text-3xl tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
-                PARTICLE WINDS
-              </h1>
-              <p className="text-xs text-accent-cyan uppercase tracking-[0.2em] font-medium drop-shadow-md">
-                Harmonic Particle Flow
-              </p>
-            </div>
-          </div>
 
-          <div className="flex gap-2 glass-panel rounded-full p-2 pr-6 pl-6 items-center border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-            <span className="text-xs text-gray-400 mr-4 border-r border-white/10 pr-4 flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${stats.fps >= 50 ? 'bg-accent-green' : stats.fps >= 30 ? 'bg-accent-yellow' : 'bg-red-400'} animate-pulse`}></span>
-              FPS: <span className="text-white font-mono">{stats.fps}</span>
-            </span>
-            <span className="text-xs text-gray-400 mr-4 border-r border-white/10 pr-4">
-              Entities: <span className="text-accent-pink font-mono drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]">{config.density.toLocaleString()}</span>
-            </span>
-            <button
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all mr-2 ${isRecording
-                ? 'bg-red-500/90 text-white animate-pulse'
-                : 'bg-white/10 text-gray-400 hover:text-white hover:bg-white/20'
-                }`}
-              title={isRecording ? 'Stop Recording' : 'Record 8s Video'}
-            >
-              <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-white' : 'bg-red-500'}`}></span>
-              <span className="text-xs font-medium">
-                {isRecording ? `${recordingTimeLeft}s` : 'REC'}
+            <div className="flex gap-2 glass-panel rounded-full p-2 pr-6 pl-6 items-center border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
+              <span className="text-xs text-gray-400 mr-4 border-r border-white/10 pr-4 flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${stats.fps >= 50 ? 'bg-accent-green' : stats.fps >= 30 ? 'bg-accent-yellow' : 'bg-red-400'} animate-pulse`}></span>
+                FPS: <span className="text-white font-mono">{stats.fps}</span>
               </span>
-            </button>
-            <button
-              onClick={() => setSidebarVisible(!sidebarVisible)}
-              className="text-gray-400 hover:text-white transition-colors hover:rotate-90 duration-500"
-              title="Toggle Settings Panel"
-            >
-              <span className="material-icons-round text-lg">settings</span>
-            </button>
-            <button
-              onClick={handleToggleFullscreen}
-              className="text-gray-400 hover:text-white transition-colors ml-3"
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-            >
-              <span className="material-icons-round text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
-            </button>
-          </div>
-        </header>
+              <span className="text-xs text-gray-400 mr-4 border-r border-white/10 pr-4">
+                Entities: <span className="text-accent-pink font-mono drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]">{config.density.toLocaleString()}</span>
+              </span>
+              <button
+                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all mr-2 ${isRecording
+                  ? 'bg-red-500/90 text-white animate-pulse'
+                  : 'bg-white/10 text-gray-400 hover:text-white hover:bg-white/20'
+                  }`}
+                title={isRecording ? 'Stop Recording' : 'Record 8s Video'}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-white' : 'bg-red-500'}`}></span>
+                <span className="text-xs font-medium">
+                  {isRecording ? `${recordingTimeLeft}s` : 'REC'}
+                </span>
+              </button>
+              <button
+                onClick={() => setSidebarVisible(!sidebarVisible)}
+                className="text-gray-400 hover:text-white transition-colors hover:rotate-90 duration-500"
+                title="Toggle Settings Panel"
+              >
+                <span className="material-icons-round text-lg">settings</span>
+              </button>
+              <button
+                onClick={handleEnterViewingMode}
+                className="text-gray-400 hover:text-white transition-colors ml-3"
+                title="Viewing Mode (press Escape to exit)"
+              >
+                <span className="material-icons-round text-lg">visibility</span>
+              </button>
+              <button
+                onClick={handleToggleFullscreen}
+                className="text-gray-400 hover:text-white transition-colors ml-3"
+                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              >
+                <span className="material-icons-round text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Main Canvas Container */}
         <div
-          className="flex-1 rounded-3xl border border-white/10 relative group cursor-crosshair overflow-hidden backdrop-blur-[2px] bg-black/20 shadow-inner min-h-0"
+          className={`flex-1 relative group cursor-crosshair overflow-hidden backdrop-blur-[2px] shadow-inner min-h-0 transition-all duration-300 ${viewingMode
+            ? 'rounded-none border-0 bg-black/20'
+            : 'rounded-3xl border border-white/10 bg-black/20'
+            }`}
           onClick={() => setHasInteracted(true)}
         >
 
@@ -248,25 +284,27 @@ const App: React.FC = () => {
           />
 
           {/* Overlay Stats */}
-          <div className="absolute top-6 left-6 z-20 pointer-events-none">
-            <div className="flex flex-col gap-3">
-              <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float">
-                <div className="w-2 h-2 rounded-full bg-accent-pink shadow-[0_0_12px_#ec4899]"></div>
-                <span className="text-xs font-mono text-gray-200">Alpha Swarm: {stats.alpha.toLocaleString()}</span>
-              </div>
-              <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float" style={{ animationDelay: '1s' }}>
-                <div className="w-2 h-2 rounded-full bg-accent-cyan shadow-[0_0_12px_#06b6d4]"></div>
-                <span className="text-xs font-mono text-gray-200">Beta Cluster: {stats.beta.toLocaleString()}</span>
-              </div>
-              <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float" style={{ animationDelay: '2s' }}>
-                <div className="w-2 h-2 rounded-full bg-accent-yellow shadow-[0_0_12px_#eab308]"></div>
-                <span className="text-xs font-mono text-gray-200">Gamma Nebula: {stats.gamma.toLocaleString()}</span>
+          {!viewingMode && (
+            <div className="absolute top-6 left-6 z-20 pointer-events-none">
+              <div className="flex flex-col gap-3">
+                <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float">
+                  <div className="w-2 h-2 rounded-full bg-accent-pink shadow-[0_0_12px_#ec4899]"></div>
+                  <span className="text-xs font-mono text-gray-200">Alpha Swarm: {stats.alpha.toLocaleString()}</span>
+                </div>
+                <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float" style={{ animationDelay: '1s' }}>
+                  <div className="w-2 h-2 rounded-full bg-accent-cyan shadow-[0_0_12px_#06b6d4]"></div>
+                  <span className="text-xs font-mono text-gray-200">Beta Cluster: {stats.beta.toLocaleString()}</span>
+                </div>
+                <div className="bg-black/40 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/5 flex items-center gap-3 w-fit shadow-lg animate-float" style={{ animationDelay: '2s' }}>
+                  <div className="w-2 h-2 rounded-full bg-accent-yellow shadow-[0_0_12px_#eab308]"></div>
+                  <span className="text-xs font-mono text-gray-200">Gamma Nebula: {stats.gamma.toLocaleString()}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Floating Hint - hidden after first interaction */}
-          {!hasInteracted && (
+          {!viewingMode && !hasInteracted && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20">
               <div className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 text-xs text-white/90 shadow-2xl flex items-center gap-2">
                 <span className="material-icons-round text-sm text-primary">touch_app</span>
@@ -279,7 +317,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Sidebar with slide animation */}
-      <div className={`transition-all duration-300 ease-in-out ${sidebarVisible ? 'w-[420px]' : 'w-0'} overflow-hidden shrink-0`}>
+      <div className={`transition-all duration-300 ease-in-out ${!viewingMode && sidebarVisible ? 'w-[420px]' : 'w-0'} overflow-hidden shrink-0`}>
         <Sidebar
           config={config}
           setConfig={setConfig}
